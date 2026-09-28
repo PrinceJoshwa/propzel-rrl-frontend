@@ -82,11 +82,7 @@ export default function Team() {
       setUsers([]);
       setLoadError(formatApiError(e.response?.data?.detail));
     } finally { setLoading(false); }
-<<<<<<< HEAD
-  }, [user?.role]);
-=======
   }, []);
->>>>>>> 4b578a135b3e2523610263f6b2eca720089b20fc
   useEffect(() => { if (user && activeOrganizationId) load(); }, [user, activeOrganizationId, load]);
 
   const submit = async () => {
