@@ -75,15 +75,18 @@ export default function Team() {
     setLoading(true);
     setLoadError("");
     try {
-      const usersUrl = user?.role === "super_admin" ? "/users" : "/users";
-      const [usersResponse, organizationsResponse] = await Promise.all([api.get(usersUrl), api.get("/organizations")]);
+      const [usersResponse, organizationsResponse] = await Promise.all([api.get("/users"), api.get("/organizations")]);
       setUsers(asArray(usersResponse.data));
       setOrganizations(asArray(organizationsResponse.data));
     } catch (e) {
       setUsers([]);
       setLoadError(formatApiError(e.response?.data?.detail));
     } finally { setLoading(false); }
+<<<<<<< HEAD
   }, [user?.role]);
+=======
+  }, []);
+>>>>>>> 4b578a135b3e2523610263f6b2eca720089b20fc
   useEffect(() => { if (user && activeOrganizationId) load(); }, [user, activeOrganizationId, load]);
 
   const submit = async () => {
