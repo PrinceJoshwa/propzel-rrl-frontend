@@ -304,7 +304,7 @@ export default function Leads() {
   const [projectFilter, setProjectFilter] = useState(params.get("project_id") || "");
   const [createdFilter, setCreatedFilter] = useState(params.get("created") || "");
   const [loading, setLoading] = useState(false);
-  const canCreateLead = ["admin", "super_admin"].includes(user?.role);
+  const canCreateLead = ["admin", "manager", "super_admin"].includes(user?.role);
   const canMoveLead = ["admin", "manager", "executive", "sales", "super_admin"].includes(user?.role);
 
   // Sync filters → URL
