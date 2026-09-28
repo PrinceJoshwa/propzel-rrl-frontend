@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
-import { api, formatApiError } from "@/lib/api";
+import { api, clearAuthTokens, formatApiError, setAuthTokens } from "@/lib/api";
 
 const AuthCtx = createContext(null);
 
@@ -24,9 +24,12 @@ export function AuthProvider({ children }) {
     setError("");
     try {
       const { data } = await api.post("/auth/login", { email, password });
-      setUser(data);
+      setAuthTokens(data);
+      const { access_token, refresh_token, ...userData } = data;
+      setUser(userData);
       return true;
     } catch (e) {
+      clearAuthTokens();
       setError(formatApiError(e.response?.data?.detail) || e.message);
       return false;
     }
@@ -36,6 +39,7 @@ export function AuthProvider({ children }) {
     try {
       await api.post("/auth/logout");
     } catch {}
+    clearAuthTokens();
     setUser(false);
   };
 

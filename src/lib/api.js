@@ -3,6 +3,8 @@ import axios from "axios";
 const BACKEND_URL = (process.env.REACT_APP_BACKEND_URL || "")
   .replace(/\/+$/, "")
   .replace(/\/api$/, "");
+const ACCESS_TOKEN_KEY = "propzel.accessToken";
+const REFRESH_TOKEN_KEY = "propzel.refreshToken";
 
 export const api = axios.create({
   baseURL: `${BACKEND_URL}/api`,
@@ -10,14 +12,26 @@ export const api = axios.create({
   timeout: 20000,
 });
 
+export function setAuthTokens({ access_token, refresh_token }) {
+  if (access_token) localStorage.setItem(ACCESS_TOKEN_KEY, access_token);
+  if (refresh_token) localStorage.setItem(REFRESH_TOKEN_KEY, refresh_token);
+}
+
+export function clearAuthTokens() {
+  localStorage.removeItem(ACCESS_TOKEN_KEY);
+  localStorage.removeItem(REFRESH_TOKEN_KEY);
+}
+
 api.interceptors.request.use((config) => {
   const organizationId = localStorage.getItem("propzel.activeOrganizationId");
+  const accessToken = localStorage.getItem(ACCESS_TOKEN_KEY);
   // Bootstrap endpoints must remain reachable even when a browser holds an
   // organisation ID that was deleted or belongs to an older environment.
   // Otherwise `/organizations` is rejected before the UI can repair it.
   const path = String(config.url || "").split("?")[0];
   const unscopedEndpoints = ["/auth/me", "/auth/login", "/auth/logout", "/auth/refresh", "/organizations", "/super-admin"];
   const isUnscoped = unscopedEndpoints.some((endpoint) => path === endpoint || path.startsWith(`${endpoint}/`));
+  if (accessToken) config.headers.Authorization = `Bearer ${accessToken}`;
   if (organizationId && !isUnscoped) config.headers["X-Organization-Id"] = organizationId;
   return config;
 });
