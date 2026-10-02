@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { api, formatApiError } from "@/lib/api";
@@ -48,9 +48,35 @@ const GROUPS = [
 
 export default function Sidebar() {
   const { user, logout, setUser } = useAuth();
+  const location = useLocation();
   const [profileOpen, setProfileOpen] = useState(false);
   const [phone, setPhone] = useState(user?.phone || "");
+  const [calendar, setCalendar] = useState(null);
+  const [calendarBusy, setCalendarBusy] = useState(false);
   const phoneMasked = !!user?.phone_masked;
+
+  const loadCalendar = async () => {
+    try { const { data } = await api.get("/integrations/google-calendar/status"); setCalendar(data); }
+    catch { setCalendar({ configured: false, connected: false }); }
+  };
+  useEffect(() => {
+    const result = new URLSearchParams(location.search).get("google_calendar");
+    if (!result) return;
+    toast[result === "connected" ? "success" : "error"](result === "connected" ? "Google Calendar connected" : "Google Calendar connection was not completed");
+    window.history.replaceState({}, "", `${window.location.pathname}${window.location.hash}`);
+    loadCalendar();
+  }, [location.search]);
+  const connectCalendar = async () => {
+    setCalendarBusy(true);
+    try { const { data } = await api.get("/integrations/google-calendar/connect"); window.location.assign(data.authorization_url); }
+    catch (e) { toast.error(formatApiError(e.response?.data?.detail)); setCalendarBusy(false); }
+  };
+  const disconnectCalendar = async () => {
+    setCalendarBusy(true);
+    try { await api.delete("/integrations/google-calendar"); setCalendar((current) => ({ ...current, connected: false })); toast.success("Google Calendar disconnected"); }
+    catch (e) { toast.error(formatApiError(e.response?.data?.detail)); }
+    finally { setCalendarBusy(false); }
+  };
 
   const saveProfile = async () => {
     try {
@@ -110,7 +136,7 @@ export default function Sidebar() {
       <div className="relative z-10 px-4 pb-6">
         <div className="flex items-center gap-3">
           <button
-            onClick={() => { setPhone(phoneMasked ? "" : user?.phone || ""); setProfileOpen(true); }}
+            onClick={() => { setPhone(phoneMasked ? "" : user?.phone || ""); setProfileOpen(true); loadCalendar(); }}
             className="h-9 w-9 rounded-sm bg-white/10 hover:bg-white/20 grid place-items-center text-sm font-display font-bold transition-colors duration-150"
             data-testid="sidebar-profile-btn"
             title="My profile"
@@ -158,6 +184,17 @@ export default function Sidebar() {
                 className="w-full h-10 border border-[#E6E4DD] rounded-sm px-3 text-sm focus:outline-none focus:border-forest"
               />
               <div className="text-[11px] text-forest/50 mt-1">The configured calling provider uses this number when bridging calls.</div>
+            </div>
+            <div className="border-t border-[#E6E4DD] pt-4 flex items-center justify-between gap-4">
+              <div>
+                <div className="label-caps">Google Calendar</div>
+                <div className="text-xs text-forest/60 mt-1">{calendar?.connected ? "Connected. Assigned site visits sync to your calendar." : calendar?.configured === false ? "Calendar connection is not configured for this workspace." : "Connect your account to sync assigned site visits."}</div>
+              </div>
+              {calendar?.connected ? (
+                <button type="button" disabled={calendarBusy} onClick={disconnectCalendar} className="h-9 px-4 shrink-0 rounded-sm border border-forest text-forest text-sm font-medium hover:bg-forest hover:text-white disabled:opacity-50">{calendarBusy ? "Disconnecting..." : "Disconnect"}</button>
+              ) : (
+                <button type="button" disabled={calendarBusy || calendar?.configured === false} onClick={connectCalendar} className="h-9 px-4 shrink-0 rounded-sm bg-forest text-white text-sm font-medium hover:bg-forest-soft disabled:opacity-50">{calendarBusy ? "Connecting..." : "Connect Google Calendar"}</button>
+              )}
             </div>
           </div>
           <DialogFooter>
