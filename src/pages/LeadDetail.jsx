@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
-import { api, asArray, formatApiError, STAGE_META, STAGE_LABEL, SOURCE_LABEL, inr, relTime } from "@/lib/api";
+import { api, asArray, formatApiError, STAGE_META, STAGE_LABEL, SOURCE_LABEL, inr, relTime, formatScheduledActivityMessage } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { LEADS } from "@/constants/testIds";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -621,7 +621,7 @@ export default function LeadDetail() {
                         <span className="font-medium">{a.actor_name || "System"}</span>
                         <span className="text-forest/50"> · {a.kind.replace(/_/g, " ")}</span>
                       </div>
-                      <div className="text-sm text-forest/80 mt-0.5">{a.message}</div>
+                      <div className="text-sm text-forest/80 mt-0.5">{formatScheduledActivityMessage(a)}</div>
                       {rec && (
                         <div className="mt-2 flex items-center gap-2">
                           <audio controls src={rec} className="h-8" style={{ width: 260 }} />

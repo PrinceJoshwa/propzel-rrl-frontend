@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { api, asArray, relTime } from "@/lib/api";
+import { api, asArray, relTime, formatISTDateTime } from "@/lib/api";
 import { Link } from "react-router-dom";
 import { FOLLOWUP } from "@/constants/testIds";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -97,7 +97,7 @@ function Section({ title, tone, items, leads, onComplete }) {
                 ) : <span className="text-forest/50">Lead removed</span>}
                 <div className="text-xs text-forest/60 mt-0.5">
                   <span className="uppercase tracking-[0.15em] font-bold text-[10px] mr-2">{i.kind}</span>
-                  {new Date(i.due_at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}
+                  {formatISTDateTime(i.due_at)}
                   <span className={`ml-2 ${overdue ? "text-clay font-medium" : "text-forest/40"}`}>· {relTime(i.due_at)}</span>
                 </div>
               </div>

@@ -79,6 +79,43 @@ export function relTime(iso) {
   return d.toLocaleDateString();
 }
 
+const CRM_TIME_ZONE = "Asia/Kolkata";
+
+export function formatISTDateTime(iso) {
+  const date = new Date(iso);
+  if (!iso || Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("en-IN", {
+    timeZone: CRM_TIME_ZONE,
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+    timeZoneName: "short",
+  }).format(date);
+}
+
+export function formatISTTime(iso) {
+  const date = new Date(iso);
+  if (!iso || Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("en-IN", {
+    timeZone: CRM_TIME_ZONE,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  }).format(date);
+}
+
+export function formatScheduledActivityMessage(activity) {
+  const message = String(activity?.message || "");
+  if (!["followup_scheduled", "site_visit_scheduled"].includes(activity?.kind)) return message;
+  return message.replace(
+    /(scheduled at\s+)(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2}))/i,
+    (_, prefix, timestamp) => `${prefix}${formatISTDateTime(timestamp)}`,
+  );
+}
+
 export const SOURCE_LABEL = {
   magicbricks: "MagicBricks",
   "99acres": "99acres",

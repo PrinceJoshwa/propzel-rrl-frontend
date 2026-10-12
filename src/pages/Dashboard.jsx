@@ -408,7 +408,7 @@
 //   );
 // }
 import React, { useEffect, useState } from "react";
-import { api, asArray, formatApiError, STAGE_META, SOURCE_LABEL, inr, relTime } from "@/lib/api";
+import { api, asArray, formatApiError, STAGE_META, SOURCE_LABEL, inr, relTime, formatISTTime } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { useOrganization } from "@/contexts/OrganizationContext";
 import { DASH } from "@/constants/testIds";
@@ -768,7 +768,7 @@ function ActionItemsTab() {
           items={data.todays_followups.map((f) => ({
             id: f.id,
             leadId: f.lead_id,
-            primary: `${new Date(f.due_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`,
+            primary: formatISTTime(f.due_at),
             secondary: f.kind.toUpperCase(),
             note: overdueLabel(f.due_at),
           }))}
@@ -779,7 +779,7 @@ function ActionItemsTab() {
           items={data.planned_visits.map((v) => ({
             id: v.id,
             leadId: v.lead_id,
-            primary: `${new Date(v.scheduled_at).toLocaleDateString([], { day: "2-digit", month: "short" })} · ${new Date(v.scheduled_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`,
+            primary: `${new Date(v.scheduled_at).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short" })} · ${formatISTTime(v.scheduled_at)}`,
             secondary: "SITE VISIT",
             note: overdueLabel(v.scheduled_at),
           }))}
