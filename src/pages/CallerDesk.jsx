@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { api, asArray, formatApiError, relTime } from "@/lib/api";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import CallRecording from "@/components/CallRecording";
 import { BarChart3, ListFilter, Megaphone, PhoneCall, PhoneOutgoing, Play, Pause, Trash2, RefreshCcw, Search, Settings, Mail, MessageSquareText } from "lucide-react";
 import { toast } from "sonner";
 
@@ -111,7 +112,7 @@ function LogsPanel({ filters, setFilters, logs, loadLogs }) {
       <div className="border border-[#E6E4DD] bg-white rounded-sm overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-bone-alt/60 text-left text-[10px] uppercase tracking-[0.16em] text-forest/50">
-            <tr><th className="p-3">Lead</th><th>Status</th><th>Direction</th><th>Phone</th><th>Call SID</th><th>Duration</th><th>Date</th></tr>
+            <tr><th className="p-3">Lead</th><th>Status</th><th>Direction</th><th>Phone</th><th>Call SID</th><th>Duration</th><th>Recording</th><th>Date</th></tr>
           </thead>
           <tbody className="divide-y divide-[#E6E4DD]">
             {logs.map((l) => (
@@ -122,10 +123,11 @@ function LogsPanel({ filters, setFilters, logs, loadLogs }) {
                 <td>{l.phone_to || l.phone_from || "—"}</td>
                 <td className="font-mono text-xs text-forest/60">{l.call_sid || "—"}</td>
                 <td>{l.duration_sec || 0}s</td>
+                <td className="py-2 pr-3"><CallRecording url={l.recording_url} compact /></td>
                 <td>{relTime(l.created_at)}</td>
               </tr>
             ))}
-            {logs.length === 0 && <tr><td colSpan="7" className="p-8 text-center text-forest/50">No call logs found.</td></tr>}
+            {logs.length === 0 && <tr><td colSpan="8" className="p-8 text-center text-forest/50">No call logs found.</td></tr>}
           </tbody>
         </table>
       </div>
@@ -221,6 +223,7 @@ function CampaignsPanel({ leads, campaigns, loadCampaigns }) {
               </div>
               <div className="grid grid-cols-2 gap-3"><div><div className="label-caps">Phone</div><div>{selectedCall.phone || "—"}</div></div><div><div className="label-caps">Duration</div><div>{selectedCall.duration_sec || 0}s</div></div></div>
               <div><div className="label-caps">Call reference</div><div className="font-mono text-xs break-all">{selectedCall.call_sid || "Not available"}</div></div>
+              <div><div className="label-caps mb-1.5">Recording</div><CallRecording url={selectedCall.recording_url} /></div>
               {selectedCall.status === "connected" && <div className="text-xs text-emerald-800">Connected calls are highlighted here so the agent can record the next action immediately.</div>}
             </div>}
           </DialogContent>

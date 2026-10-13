@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { ArrowLeft, Phone, Mail, MessageSquare, CalendarPlus, BellPlus, PhoneCall, Send, PhoneMissed, Download, PhoneOutgoing, Pencil, Trash2, Paperclip, FileText } from "lucide-react";
 import { toast } from "sonner";
+import CallRecording from "@/components/CallRecording";
 import StarRating from "@/components/StarRating";
 
 const KIND_ICON = {
@@ -610,6 +611,7 @@ export default function LeadDetail() {
                 const Icon = KIND_ICON[a.kind] || Send;
                 // Legacy Twilio recordings require browser authentication and
                 // must never be fetched by the Taskko UI.
+                const isCallActivity = String(a.kind || "").includes("call");
                 const rec = a.meta?.recording_url && !/twilio\.com/i.test(a.meta.recording_url) ? a.meta.recording_url : null;
                 return (
                   <div key={a.id} className="flex gap-3">
@@ -622,7 +624,9 @@ export default function LeadDetail() {
                         <span className="text-forest/50"> · {a.kind.replace(/_/g, " ")}</span>
                       </div>
                       <div className="text-sm text-forest/80 mt-0.5">{formatScheduledActivityMessage(a)}</div>
-                      {rec && (
+                      {isCallActivity ? (
+                        <div className="mt-2"><CallRecording url={rec} compact /></div>
+                      ) : rec && (
                         <div className="mt-2 flex items-center gap-2">
                           <audio controls src={rec} className="h-8" style={{ width: 260 }} />
                           <a href={rec} download className="text-xs uppercase tracking-[0.15em] font-bold text-forest hover:text-clay transition-colors duration-150 inline-flex items-center gap-1">
