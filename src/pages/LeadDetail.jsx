@@ -421,6 +421,17 @@ export default function LeadDetail() {
 
 // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(); }, [leadId]);
+  useEffect(() => {
+    let disposed = false;
+    const timer = window.setInterval(async () => {
+      if (document.hidden) return;
+      try {
+        const { data } = await api.get("/activities", { params: { lead_id: leadId, limit: 100 } });
+        if (!disposed) setActivities(asArray(data));
+      } catch { /* Keep the last successful timeline during transient failures. */ }
+    }, 10000);
+    return () => { disposed = true; window.clearInterval(timer); };
+  }, [leadId]);
   if (lead === false) return <div className="text-clay text-sm">Lead failed to load.</div>;
   if (!lead) return <div className="text-forest/50 text-sm">Loading lead…</div>;
 

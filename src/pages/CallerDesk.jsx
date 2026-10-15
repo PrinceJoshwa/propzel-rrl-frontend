@@ -173,8 +173,15 @@ function CampaignsPanel({ leads, campaigns, loadCampaigns }) {
     if (!id) return;
     const { data } = await api.get(`/callerdesk/campaigns/${id}/calls`, { params: { status: filters.status, search: filters.search, date_from: filters.date_from, date_to: filters.date_to } });
     setCalls(asArray(data));
+    setSelectedCall((previous) => previous ? asArray(data).find((call) => call.id === previous.id) || previous : null);
   };
   useEffect(() => { if (active?.id) loadCalls(active.id); }, [active?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (!document.hidden) loadCalls().catch(() => {});
+    }, 10000);
+    return () => window.clearInterval(timer);
+  }, [active?.id, filters.status, filters.search, filters.date_from, filters.date_to]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="grid xl:grid-cols-[360px_1fr] gap-5">
@@ -346,6 +353,15 @@ export default function CallerDesk() {
   useEffect(() => {
     Promise.all([loadDashboard(), loadStatus(), loadLeads(), loadLogs(), loadCampaigns(), loadMessageCampaigns()]).catch((e) => toast.error(formatApiError(e.response?.data?.detail)));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (document.hidden) return;
+      const requests = activeKey === "logs" || activeKey === "dialer" ? [loadLogs(), loadDashboard()] : [loadDashboard(), loadCampaigns()];
+      Promise.all(requests).catch(() => {});
+    }, 10000);
+    return () => window.clearInterval(timer);
+  }, [activeKey, filters.status, filters.direction, filters.search, filters.date_from, filters.date_to]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="grid lg:grid-cols-[300px_1fr] gap-0 -m-6 min-h-[calc(100vh-73px)]">
