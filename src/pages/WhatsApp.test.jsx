@@ -81,6 +81,25 @@ test("Connect timeout remains visible instead of a generic error", async () => {
   expect(container.querySelector('[role="alert"]').textContent).toBe("The connection timed out. Please try again.");
 });
 
+test("HTTP 200 provider errors stop Connect before QR loading", async () => {
+  api.post.mockResolvedValue({ data: { status: "provider_error", message: "Wrong WhatsApp API address" } });
+  await act(async () => root.render(<WhatsApp />));
+  const button = [...container.querySelectorAll("button")].find((element) => element.textContent.includes("Connect WhatsApp"));
+  await act(async () => button.click());
+  expect(container.querySelector('[role="alert"]').textContent).toBe("Wrong WhatsApp API address");
+  expect(api.get.mock.calls.some(([path]) => path === "/whatsapp/qrcode")).toBe(false);
+});
+
+test("HTTP 200 QR provider errors retain their actual message", async () => {
+  api.post.mockResolvedValue({ data: { status: "ready" } });
+  const original = api.get.getMockImplementation();
+  api.get.mockImplementation((path) => path === "/whatsapp/qrcode" ? Promise.resolve({ data: { status: "provider_error", message: "Provider instance does not exist" } }) : original(path));
+  await act(async () => root.render(<WhatsApp />));
+  const button = [...container.querySelectorAll("button")].find((element) => element.textContent.includes("Connect WhatsApp"));
+  await act(async () => button.click());
+  expect(container.querySelector('[role="alert"]').textContent).toBe("Provider instance does not exist");
+});
+
 test("profile provider errors show their reason", async () => {
   const original = api.get.getMockImplementation();
   api.get.mockImplementation((path) => path === "/whatsapp/profile" ? Promise.resolve({ data: { connection_error: "Evolution API returned HTTP 401" } }) : original(path));

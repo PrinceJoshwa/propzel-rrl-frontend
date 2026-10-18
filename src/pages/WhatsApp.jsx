@@ -13,6 +13,15 @@ const FEATURES = [
   { key: "templates", label: "Templates", hint: "Create and manage templates", icon: Layers, to: "/whatsapp/templates" },
 ];
 
+function whatsappProviderError(data) {
+  for (const response of [data, data?.provider, data?.webhook]) {
+    if (["error", "provider_error", "failed", "pending_credentials"].includes(String(response?.status || "").toLowerCase()) || response?.status === false || response?.success === false) {
+      return response.message || response.error || "The WhatsApp provider rejected the connection. Check the backend provider settings.";
+    }
+  }
+  return "";
+}
+
 function StatCard({ icon: Icon, label, value, sub, tone }) {
   const tones = {
     violet: "bg-[#5B55E8] text-white",
@@ -144,19 +153,26 @@ export default function WhatsApp() {
     try {
       const r = await api.get("/whatsapp/qrcode", { timeout: 55000 });
       const data = r.data;
-      if (data?.status === "error") {
+      if (["open", "connected"].includes(String(data?.connection_state || data?.status || "").toLowerCase())) {
+        toast.info("WhatsApp is already connected. No QR scan is required.");
+        return;
+      }
+      const providerError = whatsappProviderError(data);
+      if (providerError) {
         if (/instance id has been used|already connected/i.test(data.message || "")) {
           toast.info("WhatsApp is already connected. No QR scan is required.");
           return;
         }
-        throw new Error(data.message || "WhatsApp QR generation failed");
+        throw new Error(providerError);
       }
-      const value = data?.qrcode || data?.qr_code || data?.qr || data?.data?.qrcode || data?.data?.qr || (typeof data === "string" ? data : "");
-      if (!value) throw new Error("The WhatsApp service did not return a QR code");
+      const value = data?.qrcode?.base64 || data?.qrcode || data?.base64 || data?.qr_code || data?.qr || data?.data?.base64 || data?.data?.qrcode || data?.data?.qr || (typeof data === "string" ? data : "");
+      if (typeof value !== "string" || !value) throw new Error(data?.message || "The WhatsApp service did not return a QR code");
       setQrCode(value);
       setQrOpen(true);
     } catch (e) {
-      toast.error(requestErrorMessage(e));
+      const message = requestErrorMessage(e);
+      setConnectError(message);
+      toast.error(message);
     } finally {
       setQrBusy(false);
     }
@@ -170,6 +186,10 @@ export default function WhatsApp() {
       const r = await api.post("/whatsapp/connect", {}, { timeout: 55000 });
       if (r.data.status === "pending_credentials") {
         toast.warning(r.data.message);
+        setConnectError(r.data.message);
+        return;
+      } else if (whatsappProviderError(r.data)) {
+        throw new Error(whatsappProviderError(r.data));
       } else if (["open", "connected"].includes(String(r.data.connection_state || "").toLowerCase())) {
         toast.success("Your WhatsApp account is already connected");
       } else {
