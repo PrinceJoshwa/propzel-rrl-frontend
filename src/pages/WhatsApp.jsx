@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import WhatsAppAttachment, { whatsappDeliveryLabel } from "@/components/WhatsAppAttachment";
 import { Link, useParams } from "react-router-dom";
-import { api, asArray, formatApiError, relTime } from "@/lib/api";
+import { api, asArray, formatApiError, relTime, requestErrorMessage } from "@/lib/api";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Layers, MessageSquare, PlugZap, RefreshCw, Send, Users, Search, MoreVertical, Paperclip, Smile, Star, Archive, UserRound,
@@ -46,6 +46,8 @@ export default function WhatsApp() {
   const [qrOpen, setQrOpen] = useState(false);
   const [qrCode, setQrCode] = useState("");
   const [qrBusy, setQrBusy] = useState(false);
+  const [connectBusy, setConnectBusy] = useState(false);
+  const [connectError, setConnectError] = useState("");
   const [search, setSearch] = useState("");
   const [draft, setDraft] = useState("");
   const [replyBusy, setReplyBusy] = useState(false);
@@ -140,7 +142,7 @@ export default function WhatsApp() {
   const fetchQrCode = async () => {
     setQrBusy(true);
     try {
-      const r = await api.get("/whatsapp/qrcode");
+      const r = await api.get("/whatsapp/qrcode", { timeout: 55000 });
       const data = r.data;
       if (data?.status === "error") {
         if (/instance id has been used|already connected/i.test(data.message || "")) {
@@ -154,15 +156,18 @@ export default function WhatsApp() {
       setQrCode(value);
       setQrOpen(true);
     } catch (e) {
-      toast.error(formatApiError(e.response?.data?.detail) || e.message);
+      toast.error(requestErrorMessage(e));
     } finally {
       setQrBusy(false);
     }
   };
 
   const connect = async () => {
+    if (connectBusy) return;
+    setConnectBusy(true);
+    setConnectError("");
     try {
-      const r = await api.post("/whatsapp/connect");
+      const r = await api.post("/whatsapp/connect", {}, { timeout: 55000 });
       if (r.data.status === "pending_credentials") {
         toast.warning(r.data.message);
       } else if (["open", "connected"].includes(String(r.data.connection_state || "").toLowerCase())) {
@@ -173,7 +178,11 @@ export default function WhatsApp() {
       }
       await load();
     } catch (e) {
-      toast.error(formatApiError(e.response?.data?.detail) || e.message);
+      const message = requestErrorMessage(e);
+      setConnectError(message);
+      toast.error(message);
+    } finally {
+      setConnectBusy(false);
     }
   };
 
@@ -186,8 +195,8 @@ export default function WhatsApp() {
             <input placeholder="Search" className="w-full h-10 rounded-sm border border-[#E6E4DD] bg-bone-alt/40 pl-9 pr-3 text-sm focus:outline-none focus:border-forest" />
             <MessageSquare className="h-4 w-4 absolute left-3 top-3 text-forest/40" />
           </div>
-          <button onClick={connect} className="mt-4 w-full h-11 rounded-sm bg-[#DCFCE7] text-[#16864B] text-sm font-bold inline-flex items-center justify-center gap-2 hover:bg-[#CFF7DD] transition-colors duration-150">
-            <PlugZap className="h-4 w-4" /> {user?.role === "executive" ? "Connect your WhatsApp" : "Connect WhatsApp"}
+          <button onClick={connect} disabled={connectBusy} className="mt-4 w-full h-11 rounded-sm bg-[#DCFCE7] text-[#16864B] text-sm font-bold inline-flex items-center justify-center gap-2 hover:bg-[#CFF7DD] transition-colors duration-150 disabled:opacity-50">
+            <PlugZap className="h-4 w-4" /> {connectBusy ? "Connecting…" : user?.role === "executive" ? "Connect your WhatsApp" : "Connect WhatsApp"}
           </button>
         </div>
         <div className="p-5">
@@ -235,6 +244,7 @@ export default function WhatsApp() {
             <div className="text-sm text-forest/70 mt-1">Connection status: {profile?.connection_state || (status?.configured ? "configured" : "not connected")}</div>
           </div>
         </section>
+        {(connectError || profile?.connection_error) && <div role="alert" className="border border-clay/30 bg-white p-4 text-sm text-clay">{connectError || profile.connection_error}</div>}
 
         {feature === "dashboard" && (
           <div className="grid md:grid-cols-2 gap-4">

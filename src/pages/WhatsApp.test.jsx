@@ -8,6 +8,7 @@ jest.mock("@/lib/api", () => ({
   api: { get: jest.fn(), post: jest.fn(), defaults: { baseURL: "https://crm.example/api" } },
   asArray: (value) => Array.isArray(value) ? value : [],
   formatApiError: (value) => String(value || "Error"), relTime: () => "now",
+  requestErrorMessage: (error) => error?.code === "ECONNABORTED" ? "The connection timed out. Please try again." : error?.response?.data?.detail || error?.message || "Request failed",
 }));
 jest.mock("react-router-dom", () => ({ Link: ({ children }) => <span>{children}</span>, useParams: () => ({}) }), { virtual: true });
 jest.mock("@/contexts/AuthContext", () => ({ useAuth: () => ({ user: { id: "admin", role: "admin" } }) }));
@@ -62,6 +63,29 @@ test("profile errors do not hide received conversations", async () => {
   await act(async () => root.render(<WhatsApp />));
   expect(container.textContent).toContain("Alice");
   expect(container.textContent).toContain("Bob");
+});
+
+test("Connect allows enough time for instance preparation and webhook registration", async () => {
+  api.post.mockResolvedValue({ data: { status: "ready", connection_state: "open" } });
+  await act(async () => root.render(<WhatsApp />));
+  const button = [...container.querySelectorAll("button")].find((element) => element.textContent.includes("Connect WhatsApp"));
+  await act(async () => button.click());
+  expect(api.post).toHaveBeenCalledWith("/whatsapp/connect", {}, { timeout: 55000 });
+});
+
+test("Connect timeout remains visible instead of a generic error", async () => {
+  api.post.mockRejectedValue({ code: "ECONNABORTED" });
+  await act(async () => root.render(<WhatsApp />));
+  const button = [...container.querySelectorAll("button")].find((element) => element.textContent.includes("Connect WhatsApp"));
+  await act(async () => button.click());
+  expect(container.querySelector('[role="alert"]').textContent).toBe("The connection timed out. Please try again.");
+});
+
+test("profile provider errors show their reason", async () => {
+  const original = api.get.getMockImplementation();
+  api.get.mockImplementation((path) => path === "/whatsapp/profile" ? Promise.resolve({ data: { connection_error: "Evolution API returned HTTP 401" } }) : original(path));
+  await act(async () => root.render(<WhatsApp />));
+  expect(container.querySelector('[role="alert"]').textContent).toBe("Evolution API returned HTTP 401");
 });
 
 test("attachment download uses authenticated API and releases its object URL", async () => {

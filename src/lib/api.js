@@ -36,6 +36,47 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+let refreshPromise = null;
+api.interceptors.response.use((response) => response, async (error) => {
+  const request = error.config;
+  const path = String(request?.url || "").split("?")[0];
+  if (error.response?.status !== 401 || !request || request._authRetried || request._skipAuthRefresh ||
+      ["/auth/login", "/auth/logout", "/auth/refresh"].includes(path)) {
+    return Promise.reject(error);
+  }
+  request._authRetried = true;
+  const accessToken = localStorage.getItem(ACCESS_TOKEN_KEY);
+  // A parallel request may already have renewed the session.
+  if (accessToken && request.headers?.Authorization && request.headers.Authorization !== `Bearer ${accessToken}`) {
+    return api(request);
+  }
+  try {
+    if (!refreshPromise) {
+      const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
+      refreshPromise = api.post("/auth/refresh", refreshToken ? { refresh_token: refreshToken } : {}, { _skipAuthRefresh: true })
+        .then(({ data }) => setAuthTokens(data))
+        .finally(() => { refreshPromise = null; });
+    }
+    await refreshPromise;
+    return api(request);
+  } catch (refreshError) {
+    if ([401, 403].includes(refreshError.response?.status)) {
+      clearAuthTokens();
+      window.dispatchEvent(new Event("propzel:session-expired"));
+    }
+    return Promise.reject(refreshError);
+  }
+});
+
+export function requestErrorMessage(error) {
+  const detail = error?.response?.data?.detail;
+  if (detail != null) return formatApiError(detail);
+  if (error?.response?.status === 401) return "Your session expired. Please sign in again.";
+  if (error?.code === "ECONNABORTED" || error?.code === "ETIMEDOUT") return "The connection timed out. Please try again.";
+  if (!error?.response) return !error?.isAxiosError && error?.message ? error.message : "Could not reach the backend. Check your connection and try again.";
+  return error.response.data?.message || error.message || "Request failed. Please try again.";
+}
+
 export function formatApiError(detail) {
   if (detail == null) return "Something went wrong. Please try again.";
   if (typeof detail === "string") return detail;

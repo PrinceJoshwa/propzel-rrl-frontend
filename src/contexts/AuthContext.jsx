@@ -20,6 +20,12 @@ export function AuthProvider({ children }) {
     bootstrap();
   }, [bootstrap]);
 
+  useEffect(() => {
+    const expireSession = () => setUser(false);
+    window.addEventListener("propzel:session-expired", expireSession);
+    return () => window.removeEventListener("propzel:session-expired", expireSession);
+  }, []);
+
   const login = async (email, password) => {
     setError("");
     try {
