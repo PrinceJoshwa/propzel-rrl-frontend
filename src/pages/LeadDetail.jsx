@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { ArrowLeft, Phone, Mail, MessageSquare, CalendarPlus, BellPlus, PhoneCall, Send, PhoneMissed, Download, PhoneOutgoing, Pencil, Trash2, Paperclip, FileText } from "lucide-react";
 import { toast } from "sonner";
 import CallRecording from "@/components/CallRecording";
+import WhatsAppAttachment from "@/components/WhatsAppAttachment";
 import StarRating from "@/components/StarRating";
 
 const KIND_ICON = {
@@ -287,11 +288,23 @@ function WhatsAppPanel({ leadId }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(); }, [leadId]);
 
+  useEffect(() => {
+    let disposed = false;
+    const timer = window.setInterval(async () => {
+      if (document.hidden) return;
+      try {
+        const { data: latest } = await api.get(`/leads/${leadId}/whatsapp`);
+        if (!disposed) setData(latest);
+      } catch { /* Preserve the current chat during temporary failures. */ }
+    }, 5000);
+    return () => { disposed = true; window.clearInterval(timer); };
+  }, [leadId]);
+
   const send = async () => {
-    if (!text.trim()) return;
+    if (!text.trim() || busy || attachmentBusy) return;
     setBusy(true);
     try {
-      const r = await api.post(`/leads/${leadId}/whatsapp/messages`, { text: text.trim() });
+      const r = await api.post(`/leads/${leadId}/whatsapp/messages`, { text: text.trim() }, { timeout: 60000 });
       const status = r.data?.provider?.status;
       toast.success(status === "pending_provider" ? "WhatsApp message saved; provider pending" : "WhatsApp message sent");
       setText("");
@@ -307,8 +320,8 @@ function WhatsAppPanel({ leadId }) {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file || attachmentBusy) return;
-    if (file.size > 16 * 1024 * 1024) {
-      toast.error("Attachments must be 16 MB or smaller.");
+    if (file.size > 4 * 1024 * 1024) {
+      toast.error("Attachments must be 4 MB or smaller.");
       return;
     }
     setAttachmentBusy(true);
@@ -316,7 +329,7 @@ function WhatsAppPanel({ leadId }) {
       const form = new FormData();
       form.append("file", file);
       if (text.trim()) form.append("caption", text.trim());
-      await api.post(`/leads/${leadId}/whatsapp/attachments`, form);
+      await api.post(`/leads/${leadId}/whatsapp/attachments`, form, { timeout: 60000 });
       setText("");
       await load();
       toast.success("WhatsApp attachment sent");
@@ -346,10 +359,8 @@ function WhatsAppPanel({ leadId }) {
             {messages.map((m) => (
                 <div key={m.id} className={`flex ${m.direction === "outgoing" ? "justify-end" : "justify-start"}`}>
                   <div className={`max-w-[80%] rounded-sm px-3 py-2 text-sm ${m.direction === "outgoing" ? "bg-forest text-white" : "bg-white border border-[#E6E4DD] text-forest"}`}>
-                  {m.media_url && (m.message_type || m.type) === "image" ? <img src={m.media_url} alt={m.filename || "WhatsApp attachment"} className="max-h-56 max-w-full rounded-sm mb-1 object-contain" /> : null}
-                  {m.media_url && (m.message_type || m.type) !== "image" ? <a href={m.media_url} target="_blank" rel="noreferrer" className="flex items-center gap-2 underline"><FileText className="h-4 w-4" />{m.filename || "Open attachment"}</a> : null}
+                  <WhatsAppAttachment key={m.id} message={m} />
                   {m.text && <div className="whitespace-pre-wrap">{m.text}</div>}
-                  {!m.text && !m.media_url && m.filename && <div className="flex items-center gap-2"><FileText className="h-4 w-4" />{m.filename}</div>}
                   <div className={`text-[10px] mt-1 ${m.direction === "outgoing" ? "text-white/60" : "text-forest/40"}`}>{relTime(m.created_at)}</div>
                 </div>
               </div>
