@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { api } from "@/lib/api";
+import { importLeadBatches } from "@/lib/importLeadBatches";
 import { CONSOLE } from "@/constants/testIds";
 import { Switch } from "@/components/ui/switch";
 import { UploadCloud, FileText, CheckCircle2 } from "lucide-react";
@@ -57,37 +58,25 @@ export default function DataImport() {
     try {
       const body = {
         rows: rows.map((r) => ({
-          name: r.name,
+          name: getValue(r, "name", "user_name"),
           phone: getValue(r, "phone", "phone_number", "phone number", "mobile", "mobile_number") || null,
-          email: r.email || null,
+          email: getValue(r, "email", "email_id") || null,
           lead_date: getValue(r, "lead_date", "date", "created_date", "created at") || null,
           source: r.source || "manual",
           project_name: r.project_name || null,
           budget_min: r.budget_min ? Number(r.budget_min) : null,
           budget_max: r.budget_max ? Number(r.budget_max) : null,
-          configuration: r.configuration || null,
-          location_pref: r.location_pref || null,
-          notes: r.notes || null,
+          configuration: getValue(r, "configuration", "property_types") || null,
+          location_pref: getValue(r, "location_pref", "location_enquired") || null,
+          notes: [r.notes, r.city_name ? `City: ${r.city_name}` : null].filter(Boolean).join("; ") || null,
         })).filter((r) => r.name),
         auto_assign: autoAssign,
       };
-      const batches = [];
-      for (let index = 0; index < body.rows.length; index += 100) batches.push(body.rows.slice(index, index + 100));
-      const total = { created: 0, failed: 0, date_warnings: [] };
-      const requestErrors = [];
-      for (let index = 0; index < batches.length; index += 1) {
-        try {
-          const { data } = await api.post("/leads/import", { ...body, rows: batches[index] }, { timeout: 75000 });
-          total.created += data.created || 0;
-          total.failed += data.failed || 0;
-          total.date_warnings.push(...(data.date_warnings || []));
-        } catch (error) {
-          total.failed += batches[index].length;
-          requestErrors.push(`Batch ${index + 1}`);
-        }
-        setProgress({ completed: index + 1, total: batches.length });
-      }
-      setResult({ ...total, requestErrors });
+      if (!body.rows.length) { toast.error("No names found. Use a name or User_Name column."); return; }
+      const total = await importLeadBatches({ rows: body.rows, autoAssign,
+        post: (...args) => api.post(...args), onProgress: setProgress });
+      const { requestErrors } = total;
+      setResult(total);
       if (requestErrors.length) toast.warning(`Imported ${total.created} leads. ${total.failed} rows need retry.`);
       else toast.success(`Imported ${total.created} leads (${total.failed} skipped)`);
     } finally { setBusy(false); setProgress(null); }
@@ -107,14 +96,14 @@ export default function DataImport() {
       </div>
 
       <label className="block border-2 border-dashed border-[#E6E4DD] rounded-sm p-10 text-center hover:border-forest transition-colors duration-150 cursor-pointer bg-white">
-        <input data-testid={CONSOLE.importFile} type="file" accept=".csv,text/csv" onChange={onFile} className="hidden" />
+        <input data-testid={CONSOLE.importFile} type="file" accept=".csv,text/csv" onChange={onFile} disabled={busy} className="hidden" />
         <UploadCloud className="h-8 w-8 mx-auto text-forest/60 mb-3" />
         <div className="text-sm text-forest font-medium">{fileName || "Drop a CSV or click to browse"}</div>
         <div className="text-xs text-forest/50 mt-1">{rows.length ? `${rows.length} rows detected` : "First row = column headers"}</div>
       </label>
 
       <div className="flex items-center gap-3 border border-[#E6E4DD] bg-white rounded-sm p-4">
-        <Switch checked={autoAssign} onCheckedChange={setAutoAssign} />
+        <Switch checked={autoAssign} onCheckedChange={setAutoAssign} disabled={busy} />
         <div className="text-sm text-forest flex-1">Auto-assign imported leads to executives (least-loaded first)</div>
       </div>
 
@@ -131,7 +120,7 @@ export default function DataImport() {
           disabled={busy || rows.length === 0}
           className="h-10 px-5 rounded-sm bg-forest text-white text-sm font-medium hover:bg-forest-soft transition-colors duration-150 disabled:opacity-60"
         >
-          {busy ? `Importing${progress ? ` ${progress.completed}/${progress.total}` : ""}…` : `Import ${rows.length} rows`}
+          {busy ? `Importing${progress ? ` ${progress.completed.toLocaleString()}/${progress.total.toLocaleString()} leads` : ""}…` : `Import ${rows.length} rows`}
         </button>
       </div>
 
