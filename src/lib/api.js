@@ -32,7 +32,7 @@ api.interceptors.request.use((config) => {
   const unscopedEndpoints = ["/auth/me", "/auth/login", "/auth/logout", "/auth/refresh", "/organizations", "/super-admin"];
   const isUnscoped = unscopedEndpoints.some((endpoint) => path === endpoint || path.startsWith(`${endpoint}/`));
   if (accessToken) config.headers.Authorization = `Bearer ${accessToken}`;
-  if (organizationId && !isUnscoped) config.headers["X-Organization-Id"] = organizationId;
+  if (organizationId && !isUnscoped && !config.headers["X-Organization-Id"]) config.headers["X-Organization-Id"] = organizationId;
   return config;
 });
 

@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { ProjectProvider } from "@/contexts/ProjectContext";
 import { OrganizationProvider } from "@/contexts/OrganizationContext";
+import { LeadImportProvider } from "@/contexts/LeadImportContext";
 import { Toaster } from "@/components/ui/sonner";
 
 import Login from "@/pages/Login";
@@ -48,7 +49,7 @@ function AppRoutes() {
         path="/"
         element={
           <Protected>
-            <OrganizationProvider><ProjectProvider><AppLayout /></ProjectProvider></OrganizationProvider>
+            <OrganizationProvider><LeadImportProvider><ProjectProvider><AppLayout /></ProjectProvider></LeadImportProvider></OrganizationProvider>
           </Protected>
         }
       >

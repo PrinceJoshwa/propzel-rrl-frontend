@@ -1,5 +1,8 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { api, asArray, formatApiError, STAGE_META, SOURCE_LABEL, inr, relTime } from "@/lib/api";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { api, asArray, formatApiError, requestErrorMessage, STAGE_META, SOURCE_LABEL, inr, relTime } from "@/lib/api";
+import { useOrganization } from "@/contexts/OrganizationContext";
+import { useLeadImport } from "@/contexts/LeadImportContext";
+import DataImport from "@/pages/DataImport";
 import { useProjects } from "@/contexts/ProjectContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { LEADS } from "@/constants/testIds";
@@ -291,6 +294,9 @@ function LeadsTable({ leads, users }) {
 export default function Leads() {
   const { user } = useAuth();
   const { activeId } = useProjects();
+  const { activeOrganizationId, activeOrganization, loading: organizationLoading } = useOrganization();
+  const { busy: importing, revision: importRevision } = useLeadImport();
+  const organizationReady = !organizationLoading && !!activeOrganizationId && !!activeOrganization;
   const [params, setParams] = useSearchParams();
   const [view, setView] = useState("kanban");
   const [leads, setLeads] = useState([]);
@@ -304,6 +310,12 @@ export default function Leads() {
   const [projectFilter, setProjectFilter] = useState(params.get("project_id") || "");
   const [createdFilter, setCreatedFilter] = useState(params.get("created") || "");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [importOpen, setImportOpen] = useState(false);
+  const requestId = useRef(0);
+  const pageSize = 100;
   const canCreateLead = ["admin", "manager", "super_admin"].includes(user?.role);
   const canMoveLead = ["admin", "manager", "executive", "sales", "super_admin"].includes(user?.role);
 
@@ -320,37 +332,58 @@ export default function Leads() {
     // eslint-disable-next-line
   }, [stage, source, execFilter, ownerMode, projectFilter, createdFilter]);
 
-  const load = async () => {
+  const load = useCallback(async () => {
+    if (!organizationReady) return;
+    const currentRequest = ++requestId.current;
     setLoading(true);
+    setError("");
     try {
-      const params = {};
+      const params = { page, page_size: pageSize };
       if (projectFilter) params.project_id = projectFilter;
       if (stage) params.stage = stage;
       if (source) params.source = source;
       if (execFilter) params.assigned_to = execFilter;
       if (execFilter && ownerMode !== "any") params.owner_mode = ownerMode;
       if (q) params.search = q;
-      const [leadsR, usersR, projR] = await Promise.all([
-        api.get("/leads", { params }),
-        api.get("/users"),
-        api.get("/projects"),
-      ]);
-      let filtered = asArray(leadsR.data);
       if (createdFilter === "this_month") {
         const now = new Date();
-        const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-        filtered = filtered.filter((l) => l.created_at >= start);
+        params.created_after = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
       }
-      setLeads(filtered);
-      setUsers(asArray(usersR.data));
-      setProjects(asArray(projR.data));
+      const { data } = await api.get("/leads", { params, headers: { "X-Organization-Id": activeOrganizationId } });
+      if (currentRequest !== requestId.current) return;
+      setLeads(asArray(data));
+      setTotal(data.total ?? asArray(data).length);
+    } catch (loadError) {
+      if (currentRequest === requestId.current) setError(requestErrorMessage(loadError));
     } finally {
-      setLoading(false);
+      if (currentRequest === requestId.current) setLoading(false);
     }
-  };
+  }, [organizationReady, activeOrganizationId, page, projectFilter, stage, source, execFilter, ownerMode, q, createdFilter]);
 
-// eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { load(); }, [stage, source, q, execFilter, ownerMode, projectFilter, createdFilter]);
+  useEffect(() => { setPage(1); }, [activeOrganizationId, stage, source, q, execFilter, ownerMode, projectFilter, createdFilter]);
+  useEffect(() => {
+    const timer = setTimeout(load, 150);
+    return () => { clearTimeout(timer); requestId.current += 1; };
+  }, [load, importRevision]);
+  useEffect(() => {
+    setLeads([]); setTotal(0); setUsers([]); setProjects([]);
+  }, [activeOrganizationId]);
+  useEffect(() => {
+    if (!organizationReady) return;
+    let cancelled = false;
+    const options = { headers: { "X-Organization-Id": activeOrganizationId } };
+    Promise.allSettled([api.get("/users", options), api.get("/projects", options)]).then(([usersResult, projectsResult]) => {
+      if (cancelled) return;
+      if (usersResult.status === "fulfilled") setUsers(asArray(usersResult.value.data));
+      if (projectsResult.status === "fulfilled") setProjects(asArray(projectsResult.value.data));
+    });
+    return () => { cancelled = true; };
+  }, [organizationReady, activeOrganizationId]);
+  useEffect(() => {
+    if (!importing) return;
+    const timer = setInterval(load, 5000);
+    return () => clearInterval(timer);
+  }, [importing, load]);
   const move = async (leadId, newStage) => {
     setLeads((prev) => prev.map((l) => (l.id === leadId ? { ...l, stage: newStage } : l)));
     try {
@@ -368,7 +401,7 @@ export default function Leads() {
         <div>
           <div className="label-caps">Sales pipeline</div>
           <h2 className="font-display font-black text-3xl text-forest tracking-tight mt-1">
-            {leads.length} lead{leads.length === 1 ? "" : "s"} in view
+            {loading && !leads.length ? "Loading leads…" : error && !leads.length ? "Leads unavailable" : `${total.toLocaleString()} lead${total === 1 ? "" : "s"} in view`}
           </h2>
         </div>
         <div className="flex items-center gap-2">
@@ -388,6 +421,10 @@ export default function Leads() {
               <List className="h-3.5 w-3.5" /> List
             </button>
           </div>
+          {canCreateLead && <Dialog open={importOpen} onOpenChange={setImportOpen}>
+            <DialogTrigger asChild><button className="h-9 px-3.5 border border-[#E6E4DD] rounded-sm text-sm">Import CSV</button></DialogTrigger>
+            <DialogContent className="max-w-5xl max-h-[85vh] overflow-y-auto"><DialogHeader><DialogTitle>Import leads</DialogTitle></DialogHeader><DataImport /></DialogContent>
+          </Dialog>}
           {canCreateLead && <LeadCreateDialog users={users} projects={projects} activeProjectId={activeId !== "__all__" ? activeId : ""} onCreated={load} />}
         </div>
       </div>
@@ -439,13 +476,19 @@ export default function Leads() {
         </Select>
       </div>
 
-      {loading ? (
+      {organizationReady && total > 0 && <div className="flex items-center justify-between text-sm text-forest/70">
+        <span>Showing {((page - 1) * pageSize + 1).toLocaleString()}–{Math.min(page * pageSize, total).toLocaleString()} of {total.toLocaleString()} leads</span>
+        <div className="flex items-center gap-3"><button disabled={loading || page <= 1} onClick={() => setPage(value => value - 1)} className="border px-3 py-2 disabled:opacity-40">Previous</button><span>Page {page} of {Math.ceil(total / pageSize)}</span><button disabled={loading || page * pageSize >= total} onClick={() => setPage(value => value + 1)} className="border px-3 py-2 disabled:opacity-40">Next</button></div>
+      </div>}
+      {error && <div role="alert" className="border border-clay/30 p-4 text-clay text-sm">{error} <button className="underline" onClick={load}>Retry</button></div>}
+      {!organizationReady ? <div className="text-sm text-forest/60">{organizationLoading ? "Loading organisation…" : "Select an organisation to view leads."}</div> : loading && !leads.length ? (
         <div className="text-forest/50 text-sm">Loading…</div>
       ) : view === "kanban" ? (
         <KanbanBoard leads={leads} onMove={move} users={users} canMove={canMoveLead} />
       ) : (
         <LeadsTable leads={leads} users={users} />
       )}
+
     </div>
   );
 }

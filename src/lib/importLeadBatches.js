@@ -2,12 +2,12 @@
 const BATCH_SIZE = 500;
 const CONCURRENCY = 3;
 
-export async function importLeadBatches({ rows, autoAssign, post, onProgress }) {
+export async function importLeadBatches({ rows, autoAssign, post, onProgress, signal }) {
   const total = { created: 0, failed: 0, date_warnings: [], requestErrors: [] };
   let nextStart = 0;
   let completed = 0;
   async function worker() {
-    while (nextStart < rows.length) {
+    while (nextStart < rows.length && !signal?.aborted) {
       const start = nextStart;
       nextStart += BATCH_SIZE;
       const batch = rows.slice(start, start + BATCH_SIZE);

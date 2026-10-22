@@ -1,6 +1,5 @@
-import React, { useState } from "react";
-import { api } from "@/lib/api";
-import { importLeadBatches } from "@/lib/importLeadBatches";
+import React from "react";
+import { useLeadImport } from "@/contexts/LeadImportContext";
 import { CONSOLE } from "@/constants/testIds";
 import { Switch } from "@/components/ui/switch";
 import { UploadCloud, FileText, CheckCircle2 } from "lucide-react";
@@ -8,79 +7,9 @@ import { toast } from "sonner";
 
 const HEADERS = ["name", "phone", "email", "lead_date", "source", "project_name", "budget_min", "budget_max", "configuration", "location_pref", "notes"];
 
-function getValue(row, ...names) {
-  for (const name of names) if (row[name] != null && String(row[name]).trim()) return row[name];
-  return "";
-}
-
-function parseCsv(text) {
-  const lines = text.split(/\r?\n/).filter((l) => l.trim());
-  if (lines.length === 0) return [];
-  const headers = lines[0].split(",").map((h) => h.trim().toLowerCase().replace(/"/g, ""));
-  return lines.slice(1).map((line) => {
-    const cells = [];
-    let cur = "", inQ = false;
-    for (const ch of line) {
-      if (ch === '"') inQ = !inQ;
-      else if (ch === "," && !inQ) { cells.push(cur); cur = ""; }
-      else cur += ch;
-    }
-    cells.push(cur);
-    const row = {};
-    headers.forEach((h, i) => { row[h] = (cells[i] || "").trim(); });
-    return row;
-  });
-}
-
 export default function DataImport() {
-  const [rows, setRows] = useState([]);
-  const [fileName, setFileName] = useState("");
-  const [autoAssign, setAutoAssign] = useState(true);
-  const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState(null);
-  const [progress, setProgress] = useState(null);
-
-  const onFile = (e) => {
-    const f = e.target.files?.[0];
-    if (!f) return;
-    setFileName(f.name); setResult(null);
-    const reader = new FileReader();
-    reader.onload = () => {
-      const parsed = parseCsv(String(reader.result));
-      setRows(parsed);
-    };
-    reader.readAsText(f);
-  };
-
-  const runImport = async () => {
-    if (rows.length === 0) { toast.error("Nothing to import"); return; }
-    setBusy(true); setResult(null); setProgress(null);
-    try {
-      const body = {
-        rows: rows.map((r) => ({
-          name: getValue(r, "name", "user_name"),
-          phone: getValue(r, "phone", "phone_number", "phone number", "mobile", "mobile_number") || null,
-          email: getValue(r, "email", "email_id") || null,
-          lead_date: getValue(r, "lead_date", "date", "created_date", "created at") || null,
-          source: r.source || "manual",
-          project_name: r.project_name || null,
-          budget_min: r.budget_min ? Number(r.budget_min) : null,
-          budget_max: r.budget_max ? Number(r.budget_max) : null,
-          configuration: getValue(r, "configuration", "property_types") || null,
-          location_pref: getValue(r, "location_pref", "location_enquired") || null,
-          notes: [r.notes, r.city_name ? `City: ${r.city_name}` : null].filter(Boolean).join("; ") || null,
-        })).filter((r) => r.name),
-        auto_assign: autoAssign,
-      };
-      if (!body.rows.length) { toast.error("No names found. Use a name or User_Name column."); return; }
-      const total = await importLeadBatches({ rows: body.rows, autoAssign,
-        post: (...args) => api.post(...args), onProgress: setProgress });
-      const { requestErrors } = total;
-      setResult(total);
-      if (requestErrors.length) toast.warning(`Imported ${total.created} leads. ${total.failed} rows need retry.`);
-      else toast.success(`Imported ${total.created} leads (${total.failed} skipped)`);
-    } finally { setBusy(false); setProgress(null); }
-  };
+  const { rows, fileName, autoAssign, busy, result, progress, selectFile, setAutoAssign, runImport } = useLeadImport();
+  const onFile = event => { selectFile(event.target.files?.[0]); event.target.value = ""; };
 
   const sampleCsv = "name,phone,email,lead_date,source,project_name,budget_min,configuration\nAsha Kumar,+91 9812345678,asha@example.com,2026-09-21,website,Aurelia Heights,15000000,3BHK\nRohit Sen,+91 9823456789,rohit@example.com,8-Jul-22,magicbricks,Meridian Bay,45000000,4BHK";
 
@@ -117,10 +46,10 @@ export default function DataImport() {
         <button
           data-testid={CONSOLE.importBtn}
           onClick={runImport}
-          disabled={busy || rows.length === 0}
+          disabled={busy || rows.length === 0 || !!result}
           className="h-10 px-5 rounded-sm bg-forest text-white text-sm font-medium hover:bg-forest-soft transition-colors duration-150 disabled:opacity-60"
         >
-          {busy ? `Importing${progress ? ` ${progress.completed.toLocaleString()}/${progress.total.toLocaleString()} leads` : ""}…` : `Import ${rows.length} rows`}
+          {busy ? `Importing${progress ? ` ${progress.completed.toLocaleString()}/${progress.total.toLocaleString()} leads` : ""}…` : result ? "Import finished" : `Import ${rows.length} rows`}
         </button>
       </div>
 
